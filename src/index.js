@@ -9,21 +9,86 @@ app.use(cors());
 
 const users = [];
 
+
+/** Middleware: Verificar se o username já está cadastrado. */
 function checksExistsUserAccount(request, response, next) {
-  // Complete aqui
+  const { username } = request.headers;
+
+  const user = users.find(user =>
+    user.username === username,
+  );
+  if (!user) {
+    return response.status(404).json({ error: 'Username does not exist!' });
+  }
+
+  request.user = user;
+
+  return next();
 }
 
+
+/** Middleware: Verificar se o usuário está habilitado a criar novas tarefas. */
 function checksCreateTodosUserAvailability(request, response, next) {
-  // Complete aqui
+  const { user } = request;
+
+  // Verifica se está no plano gratuito, mas já criou 10 tarefas
+  if (!user.pro && user.todos.length === 10) {
+    return response.status(403).json({ error: 'User is not Pro and has already created 10 todos!' });
+  }
+
+  return next();
 }
 
+
+/** Middleware: Verificar se a tarefa está cadastrada e pertence ao usuário. */
 function checksTodoExists(request, response, next) {
-  // Complete aqui
+  const { username } = request.headers;
+  const { id } = request.params;
+
+  // Verifica se o usuário existe
+  const user = users.find(user =>
+    user.username === username,
+  );
+  if (!user) {
+    return response.status(404).json({ error: 'Username does not exist!' });
+  }
+
+  // Verifica se o id é uma UUID válida
+  if (!validate(id)) {
+    return response.status(400).json({ error: 'Id is not a valid uuid!' });
+  }
+
+  // Verifica se o id pertence a uma tarefa do usuário informado
+  const todo = user.todos.find((todo) =>
+    todo.id === id,
+  );
+  if (!todo) {
+    return response.status(404).json({ error: 'Id does not belong to a todo of this user!' });
+  }
+
+  request.user = user;
+  request.todo = todo;
+
+  return next();
 }
 
+
+/** Middleware: Verificar se o usuário está cadastrado. */
 function findUserById(request, response, next) {
-  // Complete aqui
+  const { id } = request.params;
+
+  const user = users.find((user) =>
+    user.id === id,
+  );
+  if (!user) {
+    return response.status(404).json({ error: 'User id not found!' });
+  }
+
+  request.user = user;
+
+  return next();
 }
+
 
 app.post('/users', (request, response) => {
   const { name, username } = request.body;
@@ -47,11 +112,13 @@ app.post('/users', (request, response) => {
   return response.status(201).json(user);
 });
 
+
 app.get('/users/:id', findUserById, (request, response) => {
   const { user } = request;
 
   return response.json(user);
 });
+
 
 app.patch('/users/:id/pro', findUserById, (request, response) => {
   const { user } = request;
@@ -65,11 +132,13 @@ app.patch('/users/:id/pro', findUserById, (request, response) => {
   return response.json(user);
 });
 
+
 app.get('/todos', checksExistsUserAccount, (request, response) => {
   const { user } = request;
 
   return response.json(user.todos);
 });
+
 
 app.post('/todos', checksExistsUserAccount, checksCreateTodosUserAvailability, (request, response) => {
   const { title, deadline } = request.body;
@@ -88,6 +157,7 @@ app.post('/todos', checksExistsUserAccount, checksCreateTodosUserAvailability, (
   return response.status(201).json(newTodo);
 });
 
+
 app.put('/todos/:id', checksTodoExists, (request, response) => {
   const { title, deadline } = request.body;
   const { todo } = request;
@@ -98,6 +168,7 @@ app.put('/todos/:id', checksTodoExists, (request, response) => {
   return response.json(todo);
 });
 
+
 app.patch('/todos/:id/done', checksTodoExists, (request, response) => {
   const { todo } = request;
 
@@ -105,6 +176,7 @@ app.patch('/todos/:id/done', checksTodoExists, (request, response) => {
 
   return response.json(todo);
 });
+
 
 app.delete('/todos/:id', checksExistsUserAccount, checksTodoExists, (request, response) => {
   const { user, todo } = request;
